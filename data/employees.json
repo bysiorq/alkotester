@@ -1,0 +1,14 @@
+{
+  "employees": [
+    {
+      "id": "1",
+      "name": "Kamil Karolak",
+      "pin": "0000"
+    },
+    {
+      "id": "2",
+      "name": "Łukasz Kozłowski",
+      "pin": "1111"
+    }
+  ]
+}
