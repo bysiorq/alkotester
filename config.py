@@ -26,7 +26,7 @@ CONFIG = {
     "rotate_dir": "cw",
 
     # --- rozpoznawanie twarzy
-    "face_detect_interval_ms": 1000,  # jak często detekcja/ID
+    "face_detect_interval_ms": 800,  # jak często detekcja/ID
     "face_min_size": 120,
     "recognition_conf_ok": 55.0,   # %
     "recognition_conf_low": 20.0,  # %
