@@ -22,11 +22,11 @@ CONFIG = {
     #   "180"  = do góry nogami
     #   "none" = bez obrotu (poziomo)
     "camera_main_size": (1280, 720),  # (W,H) z sensora
-    "camera_fps": 30,
+    "camera_fps": 60,
     "rotate_dir": "cw",
 
     # --- rozpoznawanie twarzy
-    "face_detect_interval_ms": 800,  # jak często detekcja/ID
+    "face_detect_interval_ms": 1500,  # jak często detekcja/ID
     "face_min_size": 120,
     "recognition_conf_ok": 55.0,   # %
     "recognition_conf_low": 20.0,  # %
