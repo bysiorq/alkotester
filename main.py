@@ -478,7 +478,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.measure_timer.start(100)
 
         self.set_message(
-            "A dmuchnij no…",
+            "Przeprowadzam pomiar…",
             f"{CONFIG['measure_seconds']:.1f} s",
             color="white",
         )
@@ -632,7 +632,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         if left > 0:
             self.set_message(
-                "A dmuchnij no…",
+                "Przeprowadzam pomiar…",
                 f"{left:0.1f} s",
                 color="white",
             )

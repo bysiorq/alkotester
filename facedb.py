@@ -275,29 +275,60 @@ class FaceDB:
     # ---------- Rozpoznawanie ----------
     def recognize_face(self, img_bgr):
         """
+        Wejście:
+            img_bgr – aktualna ramka z kamery już po obrocie.
+
         Zwraca:
             (emp_id or None,
              display_name or None,
-             confidence%,
+             confidence%,           (dla UI)
              bbox=(x,y,w,h) or None)
         """
         gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+        faces = self.cascade.detectMultiScale(gray, 1.2, 5)
 
-        faces = self._detect_faces(img_bgr)
-        if not faces:
+        if len(faces) == 0:
             return None, None, 0.0, None
 
+        # Największa twarz
         (x, y, w, h) = max(faces, key=lambda r: r[2] * r[3])
-        roi_gray = gray[y:y+h, x:x+w]
-        roi_gray = cv2.resize(roi_gray, (240, 240), interpolation=cv2.INTER_LINEAR)
 
+        # --- CLAMP DO ROZMIARU OBRAZU ---
+        H, W = gray.shape[:2]
+        x = int(max(0, x))
+        y = int(max(0, y))
+        w = int(max(0, w))
+        h = int(max(0, h))
+        x2 = min(x + w, W)
+        y2 = min(y + h, H)
+
+        # po obcięciu upewnij się, że ROI nie jest puste
+        if x2 <= x or y2 <= y:
+            # zwróć tylko bbox do narysowania i brak rozpoznania
+            return None, None, 0.0, (x, y, max(0, x2 - x), max(0, y2 - y))
+
+        roi_gray = gray[y:y2, x:x2]
+
+        # dodatkowa asekuracja – czasem po clampie w/h mogą być mikroskopijne
+        if roi_gray.size == 0:
+            return None, None, 0.0, (x, y, max(0, x2 - x), max(0, y2 - y))
+
+        # normalizacja do stałego rozmiaru
+        try:
+            roi_gray = cv2.resize(roi_gray, (240, 240), interpolation=cv2.INTER_LINEAR)
+        except cv2.error:
+            # jeśli resize mimo wszystko padnie, nie zabijaj GUI
+            return None, None, 0.0, (x, y, max(0, x2 - x), max(0, y2 - y))
+
+        # Cechy ORB tej twarzy
         _, desc = self.orb.detectAndCompute(roi_gray, None)
         if desc is None or len(desc) == 0:
-            return None, None, 0.0, (x, y, w, h)
+            return None, None, 0.0, (x, y, max(0, x2 - x), max(0, y2 - y))
 
-        ratio_th  = CONFIG["recognition_ratio_thresh"]
-        min_match = CONFIG["recognition_min_match"]
-        min_margin= CONFIG["recognition_min_margin"]
+        # Ustawienia progowe z configu
+        ratio_th   = CONFIG["recognition_ratio_thresh"]
+        min_match  = CONFIG["recognition_min_match"]
+        min_margin = CONFIG["recognition_min_margin"]
 
         knn_matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
 
@@ -324,9 +355,10 @@ class FaceDB:
                 second_best = emp_score
 
         if best_score < min_match:
-            return None, None, 0.0, (x, y, w, h)
+            return None, None, 0.0, (x, y, max(0, x2 - x), max(0, y2 - y))
+
         if (best_score - second_best) < min_margin:
-            return None, None, 0.0, (x, y, w, h)
+            return None, None, 0.0, (x, y, max(0, x2 - x), max(0, y2 - y))
 
         total = max(1, best_score + second_best)
         conf = min(100.0, 100.0 * (best_score / total))
@@ -334,6 +366,9 @@ class FaceDB:
         display_name = None
         if best_emp:
             emp_entry = self.emp_by_id.get(best_emp)
-            display_name = emp_entry.get("name", best_emp) if emp_entry else best_emp
+            display_name = (emp_entry.get("name", best_emp) if emp_entry else best_emp)
 
-        return best_emp, display_name, conf, (x, y, w, h)
+        # Upewnij się, że zwracany bbox ma dodatnie w/h po clampie
+        bw = max(0, x2 - x)
+        bh = max(0, y2 - y)
+        return best_emp, display_name, conf, (x, y, bw, bh)

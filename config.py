@@ -19,8 +19,8 @@ CONFIG = {
     #   "ccw"  = 90° w lewo
     #   "180"  = do góry nogami
     #   "none" = bez obrotu (poziomo)
-    "camera_main_size": (1640, 1232),  # (W,H) z sensora
-    "camera_fps": 20,
+    "camera_main_size": (1280, 720),  # (W,H) z sensora
+    "camera_fps": 60,
     "rotate_dir": "cw",
 
     "yunet_model_path": "models/face_detection_yunet_2023mar.onnx",
@@ -34,7 +34,7 @@ CONFIG = {
 
 
     # --- rozpoznawanie twarzy
-    "face_detect_interval_ms": 2000,
+    "face_detect_interval_ms": 750,
     "face_min_size": 120,
     "recognition_conf_ok": 55.0,
     "recognition_conf_low": 20.0,
