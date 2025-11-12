@@ -715,7 +715,7 @@ class MainWindow(QtWidgets.QMainWindow):
             frame = self.frame_last_bgr
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
-            # NOWA detekcja (YuNet/SSD/Haar)
+            # NOWA detekcja (YuNet/Haar)
             faces = self.facedb._detect_faces(frame)
 
             if not faces:

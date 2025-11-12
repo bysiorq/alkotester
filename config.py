@@ -28,11 +28,6 @@ CONFIG = {
     "yunet_nms_thresh": 0.3,
     "yunet_top_k": 5000,
 
-    "ssd_prototxt_path": "models/deploy.prototxt",
-    "ssd_caffemodel_path": "models/res10_300x300_ssd_iter_140000.caffemodel",
-    "ssd_conf_thresh": 0.70,
-
-
     # --- rozpoznawanie twarzy
     "face_detect_interval_ms": 750,
     "face_min_size": 120,
