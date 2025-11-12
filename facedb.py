@@ -8,10 +8,9 @@ from datetime import datetime
 
 from config import CONFIG
 
-# Ścieżki modeli (zgodnie z Twoim układem: /models)
+# Tylko YuNet (z katalogu models/)
 _YUNET_PATH = CONFIG.get("yunet_model_path", "models/face_detection_yunet_2023mar.onnx")
-_SSD_PROTO  = CONFIG.get("ssd_prototxt_path", CONFIG.get("ssd_proto_path", "models/deploy.prototxt"))
-_SSD_MODEL  = CONFIG.get("ssd_model_path",     CONFIG.get("ssd_caffemodel_path", "models/res10_300x300_ssd_iter_140000.caffemodel"))
+
 
 class FaceDB:
     """
@@ -40,7 +39,7 @@ class FaceDB:
 
         self._load_employees()
 
-        # Detektory twarzy: YuNet → SSD → Haar (fallback)
+        # Detektory twarzy: YuNet → Haar (fallback)
         self._init_detectors()
         self.cascade = cv2.CascadeClassifier(self._find_haar())
 
@@ -53,11 +52,9 @@ class FaceDB:
 
     # ---------- Detektory twarzy ----------
     def _init_detectors(self):
-        """Przygotuj detektory: YuNet (FaceDetectorYN) -> SSD (DNN) -> Haar (fallback)."""
+        """Przygotuj detektory: YuNet (FaceDetectorYN) -> Haar (fallback)."""
         self._det_yunet = None
-        self._det_ssd = None
 
-        # YuNet (OpenCV Zoo, API FaceDetectorYN)
         try:
             if hasattr(cv2, "FaceDetectorYN_create") and os.path.exists(_YUNET_PATH):
                 score_th = float(CONFIG.get("yunet_score_thresh", 0.85))
@@ -70,21 +67,14 @@ class FaceDB:
         except Exception:
             self._det_yunet = None
 
-        # SSD ResNet-10 (DNN)
-        try:
-            if os.path.exists(_SSD_PROTO) and os.path.exists(_SSD_MODEL):
-                self._det_ssd = cv2.dnn.readNetFromCaffe(_SSD_PROTO, _SSD_MODEL)
-        except Exception:
-            self._det_ssd = None
-
     def _detect_faces(self, img_bgr):
         """
         Zwraca listę [(x,y,w,h), ...] w pikselach.
-        Priorytet: YuNet -> SSD -> Haar.
+        Priorytet: YuNet -> Haar.
         """
         h, w = img_bgr.shape[:2]
 
-        # YuNet
+        # --- YuNet ---
         if self._det_yunet is not None:
             try:
                 self._det_yunet.setInputSize((w, h))
@@ -99,35 +89,7 @@ class FaceDB:
             except Exception:
                 pass
 
-        # SSD (DNN)
-        if self._det_ssd is not None:
-            try:
-                blob = cv2.dnn.blobFromImage(
-                    img_bgr, 1.0, (300, 300),
-                    (104.0, 177.0, 123.0), swapRB=False, crop=False
-                )
-                self._det_ssd.setInput(blob)
-                det = self._det_ssd.forward()
-                conf_th = float(CONFIG.get("ssd_conf_thresh", 0.70))
-                boxes = []
-                # det: [1,1,N,7] => (batch, class, i, [id, conf, x1,y1,x2,y2])
-                for i in range(det.shape[2]):
-                    conf = float(det[0, 0, i, 2])
-                    if conf >= conf_th:
-                        x1 = int(det[0, 0, i, 3] * w)
-                        y1 = int(det[0, 0, i, 4] * h)
-                        x2 = int(det[0, 0, i, 5] * w)
-                        y2 = int(det[0, 0, i, 6] * h)
-                        xx1, yy1 = max(0, x1), max(0, y1)
-                        xx2, yy2 = min(w - 1, x2), min(h - 1, y2)
-                        if xx2 > xx1 and yy2 > yy1:
-                            boxes.append((xx1, yy1, xx2 - xx1, yy2 - yy1))
-                if boxes:
-                    return boxes
-            except Exception:
-                pass
-
-        # Haar (fallback)
+        # --- Haar (fallback) ---
         try:
             gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
             faces = self.cascade.detectMultiScale(gray, 1.2, 5)
@@ -139,18 +101,25 @@ class FaceDB:
     def _find_haar(self):
         """Znajdź haarcascade_frontalface_default.xml w typowych ścieżkach."""
         candidates = []
+
         if hasattr(cv2, "data") and hasattr(cv2.data, "haarcascades"):
             candidates.append(cv2.data.haarcascades)
+
         candidates += [
             "/usr/share/opencv4/haarcascades/",
             "/usr/share/opencv/haarcascades/",
+            "/usr/local/share/opencv4/haarcascades/",
+            "./",
         ]
+
         fname = "haarcascade_frontalface_default.xml"
         for base in candidates:
             p = os.path.join(base, fname)
             if os.path.exists(p):
                 return p
-        return fname  # fallback: bieżący katalog
+
+        # fallback – bieżący katalog
+        return fname
 
     def _load_employees(self):
         """employees.json -> self.employees, self.emp_by_pin, self.emp_by_id"""
@@ -205,9 +174,11 @@ class FaceDB:
         _, desc = self.orb.detectAndCompute(gray, None)
         if desc is None or len(desc) == 0:
             return False
+
         if emp_id not in self.index:
             self.index[emp_id] = []
         self.index[emp_id].append(desc)
+
         max_len = CONFIG.get("online_max_samples_per_emp", 20)
         if len(self.index[emp_id]) > max_len:
             self.index[emp_id] = self.index[emp_id][-max_len:]
@@ -285,9 +256,11 @@ class FaceDB:
              bbox=(x,y,w,h) or None)
         """
         gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-        faces = self.cascade.detectMultiScale(gray, 1.2, 5)
 
-        if len(faces) == 0:
+        # Używamy YuNet+Haar przez wspólną funkcję
+        faces = self._detect_faces(img_bgr)
+
+        if not faces:
             return None, None, 0.0, None
 
         # Największa twarz
@@ -302,22 +275,16 @@ class FaceDB:
         x2 = min(x + w, W)
         y2 = min(y + h, H)
 
-        # po obcięciu upewnij się, że ROI nie jest puste
         if x2 <= x or y2 <= y:
-            # zwróć tylko bbox do narysowania i brak rozpoznania
             return None, None, 0.0, (x, y, max(0, x2 - x), max(0, y2 - y))
 
         roi_gray = gray[y:y2, x:x2]
-
-        # dodatkowa asekuracja – czasem po clampie w/h mogą być mikroskopijne
         if roi_gray.size == 0:
             return None, None, 0.0, (x, y, max(0, x2 - x), max(0, y2 - y))
 
-        # normalizacja do stałego rozmiaru
         try:
             roi_gray = cv2.resize(roi_gray, (240, 240), interpolation=cv2.INTER_LINEAR)
         except cv2.error:
-            # jeśli resize mimo wszystko padnie, nie zabijaj GUI
             return None, None, 0.0, (x, y, max(0, x2 - x), max(0, y2 - y))
 
         # Cechy ORB tej twarzy
@@ -368,7 +335,6 @@ class FaceDB:
             emp_entry = self.emp_by_id.get(best_emp)
             display_name = (emp_entry.get("name", best_emp) if emp_entry else best_emp)
 
-        # Upewnij się, że zwracany bbox ma dodatnie w/h po clampie
         bw = max(0, x2 - x)
         bh = max(0, y2 - y)
         return best_emp, display_name, conf, (x, y, bw, bh)
