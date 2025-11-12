@@ -575,6 +575,16 @@ class MainWindow(QtWidgets.QMainWindow):
         # koniec odliczania CALIBRATE
         self._stop_timer(self.calibrate_timer)
 
+        # Wymuś pojedyncze wywołanie rozpoznawania twarzy na koniec kalibracji.
+        # Jeśli interwał face_timer jest bardzo długi, to w trakcie 3‑sekundowego
+        # stanu CALIBRATE nie następuje żadne wywołanie on_face_tick().
+        # Dzięki temu last_face_bbox, calibrate_seen_face oraz calibrate_good_face
+        # zostaną zaktualizowane przed podjęciem decyzji.
+        try:
+            self.on_face_tick()
+        except Exception:
+            pass
+
         # Priorytety przejścia do pomiaru:
         #
         # 1. fallback_pin_flag == True:
@@ -663,8 +673,8 @@ class MainWindow(QtWidgets.QMainWindow):
         """
         Zbieramy dobre próbki twarzy danego pracownika:
           - twarz w kadrze
-          - wystarczająco duża
-          - ostra i dobrze oświetlona
+          - wystarczająco duża (face_min_size)
+          - ostra i dobrze oświetlona (_face_quality)
         Zapisujemy wycięty face ROI (240x240 BGR).
 
         Jeśli w train_timeout_sec nie zbierzemy train_required_shots -> anuluj.
@@ -693,7 +703,7 @@ class MainWindow(QtWidgets.QMainWindow):
             nonlocal saved, imgs, deadline
 
             if time.time() > deadline:
-                # timeout
+                self.last_face_bbox = None
                 self.set_message("Nie udało się zebrać próbek", "Spróbuj ponownie", color="red")
                 QtCore.QTimer.singleShot(2000, self.enter_idle)
                 return
@@ -704,65 +714,52 @@ class MainWindow(QtWidgets.QMainWindow):
 
             frame = self.frame_last_bgr
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            faces = self.facedb.cascade.detectMultiScale(gray, 1.2, 5)
 
-            if len(faces) == 0:
-                self.set_message(
-                    "Przytrzymaj twarz w obwódce",
-                    f"Zbieram próbki {saved}/{need}",
-                    color="white",
-                )
+            # NOWA detekcja (YuNet/SSD/Haar)
+            faces = self.facedb._detect_faces(frame)
+
+            if not faces:
+                self.last_face_bbox = None
+                self.set_message("Przytrzymaj twarz w obwódce", f"Zbieram próbki {saved}/{need}", color="white")
                 QtCore.QTimer.singleShot(80, tick)
                 return
 
             (x, y, w, h) = max(faces, key=lambda r: r[2] * r[3])
+            self.last_face_bbox = (x, y, w, h)       # pokaż ramkę
+            self.last_confidence = 100.0             # zielona ramka podczas zbierania
 
-            # Czy twarz wystarczająco duża?
+            # rozmiar twarzy
             if max(w, h) < CONFIG["face_min_size"]:
-                self.set_message(
-                    "Podejdź bliżej",
-                    f"Zbieram próbki {saved}/{need}",
-                    color="white",
-                )
+                self.set_message("Podejdź bliżej", f"Zbieram próbki {saved}/{need}", color="white")
                 QtCore.QTimer.singleShot(80, tick)
                 return
 
-            # ocena jakości (ostrość/jasność)
+            # jakość (ostrość/jasność)
             roi_gray = gray[y:y+h, x:x+w]
             roi_gray_resized = cv2.resize(roi_gray, (240, 240), interpolation=cv2.INTER_LINEAR)
             ok, sharp, bright = _face_quality(roi_gray_resized)
             if not ok:
-                self.set_message(
-                    "Stań prosto, światło/ostrość",
-                    f"ostrość {sharp:0.0f}, jasność {bright:0.0f}  [{saved}/{need}]",
-                    color="white",
-                )
+                self.set_message("Stań prosto, popraw światło",
+                                f"ostrość {sharp:0.0f}, jasność {bright:0.0f}  [{saved}/{need}]",
+                                color="white")
                 QtCore.QTimer.singleShot(80, tick)
                 return
 
-            # zapisz wyciętą twarz w BGR 240x240
+            # zapis próbki (BGR 240x240)
             face_bgr = frame[y:y+h, x:x+w].copy()
             face_bgr = cv2.resize(face_bgr, (240, 240), interpolation=cv2.INTER_LINEAR)
             imgs.append(face_bgr)
             saved += 1
 
-            self.set_message(
-                "Próbka zapisana",
-                f"Zbieram próbki {saved}/{need}",
-                color="green",
-            )
+            self.set_message("Próbka zapisana", f"Zbieram próbki {saved}/{need}", color="green")
 
             if saved >= need:
-                # zapis do dysku + trening
                 self.facedb.add_three_shots(emp_id, imgs)
                 self.training_start(post_action="DETECT_RETRY")
                 return
 
             QtCore.QTimer.singleShot(120, tick)
-
-        # startujemy pętlę zbierania
         QtCore.QTimer.singleShot(80, tick)
-
 
     def training_start(self, post_action):
         """

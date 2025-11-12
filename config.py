@@ -20,11 +20,21 @@ CONFIG = {
     #   "180"  = do góry nogami
     #   "none" = bez obrotu (poziomo)
     "camera_main_size": (1640, 1232),  # (W,H) z sensora
-    "camera_fps": 30,
+    "camera_fps": 20,
     "rotate_dir": "cw",
 
+    "yunet_model_path": "models/face_detection_yunet_2023mar.onnx",
+    "yunet_score_thresh": 0.85,
+    "yunet_nms_thresh": 0.3,
+    "yunet_top_k": 5000,
+
+    "ssd_prototxt_path": "models/deploy.prototxt",
+    "ssd_caffemodel_path": "models/res10_300x300_ssd_iter_140000.caffemodel",
+    "ssd_conf_thresh": 0.70,
+
+
     # --- rozpoznawanie twarzy
-    "face_detect_interval_ms": 1000,
+    "face_detect_interval_ms": 2000,
     "face_min_size": 120,
     "recognition_conf_ok": 55.0,
     "recognition_conf_low": 20.0,
