@@ -841,34 +841,34 @@ class MainWindow(QtWidgets.QMainWindow):
     #################################
     def _crop_and_scale_fill(self, src_rgb, target_w, target_h):
         """
-        Wypełnij cały widget bez czarnych pasów:
-          1. przytnij środek tak, by aspect == target_w/target_h,
-          2. przeskaluj do dokładnie (target_w, target_h).
+        Dopasuj obraz do widgetu BEZ UCIĘCIA:
+        - zachowujemy proporcje oryginału,
+        - skalujemy tak, by CAŁY kadr się zmieścił,
+        - jeśli proporcje nie pasują -> czarne pasy, ale zero cropa.
         """
         if target_w <= 0 or target_h <= 0:
             return None
 
         sh, sw, _ = src_rgb.shape
-        target_aspect = target_w / float(target_h)
-        src_aspect = sw / float(sh)
 
-        if src_aspect > target_aspect:
-            # obraz "za szeroki" → przytnij szerokość
-            new_sw = int(target_aspect * sh)
-            if new_sw > sw:
-                new_sw = sw
-            x0 = (sw - new_sw) // 2
-            cropped = src_rgb[:, x0:x0+new_sw, :]
-        else:
-            # obraz "za wysoki/wąski" → przytnij wysokość
-            new_sh = int(sw / target_aspect)
-            if new_sh > sh:
-                new_sh = sh
-            y0 = (sh - new_sh) // 2
-            cropped = src_rgb[y0:y0+new_sh, :, :]
+        # skala: tylko fit, żadnego przycinania
+        scale = min(target_w / float(sw), target_h / float(sh))
 
-        fitted = cv2.resize(cropped, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
-        return fitted
+        new_w = int(sw * scale)
+        new_h = int(sh * scale)
+
+        # przeskaluj cały obraz
+        resized = cv2.resize(src_rgb, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+        # tło (czarne) + centrowanie
+        out = np.zeros((target_h, target_w, 3), dtype=src_rgb.dtype)
+        x0 = (target_w - new_w) // 2
+        y0 = (target_h - new_h) // 2
+        out[y0:y0 + new_h, x0:x0 + new_w] = resized
+
+        return out
+
+
 
     def _online_learn_face(self, emp_id: str):
         """
