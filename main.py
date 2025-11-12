@@ -88,12 +88,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Okno kiosk / wygląd
         self.setWindowTitle("Alkotester – Raspberry Pi")
-        if CONFIG["kiosk_window_flags"]:
-            self.setWindowFlags(
-                QtCore.Qt.FramelessWindowHint
-                | QtCore.Qt.WindowStaysOnTopHint
-                | QtCore.Qt.X11BypassWindowManagerHint
-            )
+
         if CONFIG["hide_cursor"]:
             self.setCursor(QtCore.Qt.BlankCursor)
 
@@ -931,42 +926,35 @@ class MainWindow(QtWidgets.QMainWindow):
         if frame_bgr is None:
             return
 
-        # zapamiętujemy ostatnią klatkę
-        self.frame_last_bgr = frame_bgr.copy()
+        # ostatnia klatka do rozpoznawania itd.
+        # UWAGA: bez .copy() – nie grzebiemy w niej nigdzie indziej
+        self.frame_last_bgr = frame_bgr
 
-        # przygotuj obraz do wyświetlenia z ramką twarzy i % pewności
+        # jedna kopia na potrzeby rysowania overlayów
         disp_bgr = frame_bgr.copy()
 
         if self.last_face_bbox is not None:
             (x, y, w, h) = self.last_face_bbox
             x1, y1, x2, y2 = int(x), int(y), int(x+w), int(y+h)
 
-            # kolor ramki zależnie od pewności
             if self.last_confidence >= CONFIG["recognition_conf_ok"]:
-                color = (0,255,0)        # zielony
+                color = (0, 255, 0)
             elif self.last_confidence <= CONFIG["recognition_conf_low"]:
-                color = (0,255,255)      # żółty
+                color = (0, 255, 255)
             else:
-                color = (255,255,0)      # jasny
+                color = (255, 255, 0)
 
-            cv2.rectangle(disp_bgr, (x1,y1), (x2,y2), color, 2)
-
+            cv2.rectangle(disp_bgr, (x1, y1), (x2, y2), color, 2)
             txt = f"{self.last_confidence:.0f}%"
             cv2.putText(
-                disp_bgr,
-                txt,
-                (x2-10, y2-10),
+                disp_bgr, txt,
+                (x2 - 10, y2 - 10),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                color,
-                2,
-                cv2.LINE_AA,
+                0.7, color, 2, cv2.LINE_AA,
             )
 
-        # BGR -> RGB dla Qt
         disp_rgb = cv2.cvtColor(disp_bgr, cv2.COLOR_BGR2RGB)
 
-        # wypełnij widget podglądu (crop+scale fill)
         target_w = self.view.width()
         target_h = self.view.height()
         fitted = self._crop_and_scale_fill(disp_rgb, target_w, target_h)
@@ -974,14 +962,9 @@ class MainWindow(QtWidgets.QMainWindow):
             return
 
         h, w, _ = fitted.shape
-        qimg = QtGui.QImage(
-            fitted.data,
-            w,
-            h,
-            3*w,
-            QtGui.QImage.Format_RGB888
-        )
+        qimg = QtGui.QImage(fitted.data, w, h, 3 * w, QtGui.QImage.Format_RGB888)
         self.view.setPixmap(QtGui.QPixmap.fromImage(qimg))
+
 
 
     #################################
@@ -1177,6 +1160,14 @@ class MainWindow(QtWidgets.QMainWindow):
             GPIO.cleanup()
         except Exception:
             pass
+            
+        # DOMKNIJ WSZYSTKIE EW. DIALOGI (np. KeypadDialog), żeby nic nie zostało na ekranie
+        for w in QtWidgets.QApplication.topLevelWidgets():
+            if w is not self:
+                try:
+                    w.close()
+                except Exception:
+                    pass
 
         return super().closeEvent(e)
 

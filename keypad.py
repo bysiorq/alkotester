@@ -4,6 +4,7 @@ from PyQt5 import QtCore, QtWidgets
 class KeypadDialog(QtWidgets.QDialog):
     def __init__(self, parent=None, title="Wprowadź PIN"):
         super().__init__(parent)
+        self.setAttribute(QtCore.Qt.WA_DeleteOnClose, True)
         self.setWindowTitle(title)
         self.setModal(True)
         self.setWindowFlags(self.windowFlags() | QtCore.Qt.FramelessWindowHint)

@@ -1,6 +1,4 @@
-# config.py
-# Konfiguracja globalna aplikacji (przeniesiona 1:1 z monolitu)
-
+# config.py – uproszczony
 CONFIG = {
     # fizyczna rozdziałka panelu DSI (pionowo)
     "screen_width": 720,
@@ -9,10 +7,10 @@ CONFIG = {
     # pasek z komunikatem + przyciskami na dole
     "overlay_height_px": 220,
 
-    # tryb kiosk
+    # tryb kiosk – zawsze w trybie pełnoekranowym
     "fullscreen": True,
-    "kiosk_window_flags": False,   # frameless/topmost; False bo robiło małe okno w rogu
-    "hide_cursor": False,          # na produkcji True żeby ukryć mysz
+    # ustawienie kursora; na produkcji można dać True, aby ukryć mysz
+    "hide_cursor": True,
 
     # Kamera:
     # capture w landscape (1280x720),
@@ -21,33 +19,28 @@ CONFIG = {
     #   "ccw"  = 90° w lewo
     #   "180"  = do góry nogami
     #   "none" = bez obrotu (poziomo)
-
-    "camera_main_size": (1640, 1232),  # pełne FoV imx219 (tryb 4:3)
-    "camera_fps": 60,  # 1640×1232 ma ok. 41 fps, 30 fps jest bezpieczne
-
+    "camera_main_size": (1640, 1232),  # (W,H) z sensora
+    "camera_fps": 30,
     "rotate_dir": "cw",
 
     # --- rozpoznawanie twarzy
-    "face_detect_interval_ms": 1500,  # jak często detekcja/ID
+    "face_detect_interval_ms": 1000,
     "face_min_size": 120,
-    "recognition_conf_ok": 55.0,   # %
-    "recognition_conf_low": 20.0,  # %
+    "recognition_conf_ok": 55.0,
+    "recognition_conf_low": 20.0,
 
-    # ile prób w DETECT zanim wymusimy PIN
+    # próby w DETECT / DETECT_RETRY
     "detect_fail_limit": 5,
-    # ile prób w DETECT_RETRY zanim uznamy fallback_pin_flag
     "detect_retry_limit": 3,
 
-    # --- jakość próbek do treningu po PIN ---
+    # --- jakość próbek treningowych po PIN
     "train_required_shots": 7,
     "train_timeout_sec": 15,
-
-    # progi jakości pojedynczego ujęcia
     "quality_min_sharpness": 60.0,
     "quality_min_brightness": 40.0,
     "quality_max_brightness": 210.0,
 
-    # --- rozpoznawanie (anty-false-positive) ---
+    # --- rozpoznawanie (anty-false-positive)
     "recognition_min_match": 25,
     "recognition_ratio_thresh": 0.75,
     "recognition_min_margin": 10,
@@ -56,10 +49,9 @@ CONFIG = {
     # --- on-line uczenie twarzy ---
     "online_max_samples_per_emp": 20,
 
-
     # MQ-3 / MCP3008
     "spi_bus": 0,
-    "spi_device": 0,          # CE0
+    "spi_device": 0,
     "mq3_channel": 0,
     "baseline_samples": 150,
     "promille_scale": 220.0,
@@ -85,7 +77,5 @@ CONFIG = {
         "id": "1",
         "name": "Kamil Karolak",
         "pin": "0000",
-    },
-
-    "debug": False,
+    }
 }
