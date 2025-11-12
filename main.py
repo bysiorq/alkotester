@@ -841,24 +841,29 @@ class MainWindow(QtWidgets.QMainWindow):
     #################################
     def _crop_and_scale_fill(self, src_rgb, target_w, target_h):
         """
-        Dopasuj obraz do widgetu BEZ UCIĘCIA:
-        - zachowujemy proporcje oryginału,
-        - skalujemy tak, by CAŁY kadr się zmieścił,
-        - jeśli proporcje nie pasują -> czarne pasy, ale zero cropa.
+        Dopasuj obraz do widgetu BEZ przycinania:
+        - zachowujemy proporcje,
+        - skalujemy tak, żeby CAŁY obraz się mieścił,
+        - jeśli nie pasuje idealnie -> czarne pasy,
+        - nie robimy zoom-in ponad oryginalne wymiary.
         """
         if target_w <= 0 or target_h <= 0:
             return None
 
         sh, sw, _ = src_rgb.shape
 
-        # skala: tylko fit, żadnego przycinania
-        scale = min(target_w / float(sw), target_h / float(sh))
+        # skala tylko w dół (żeby nie rozciągać ponad oryginał)
+        scale_w = target_w / float(sw)
+        scale_h = target_h / float(sh)
+        scale = min(scale_w, scale_h, 1.0)
 
         new_w = int(sw * scale)
         new_h = int(sh * scale)
 
-        # przeskaluj cały obraz
-        resized = cv2.resize(src_rgb, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        if scale != 1.0:
+            resized = cv2.resize(src_rgb, (new_w, new_h), interpolation=cv2.INTER_AREA)
+        else:
+            resized = src_rgb
 
         # tło (czarne) + centrowanie
         out = np.zeros((target_h, target_w, 3), dtype=src_rgb.dtype)
@@ -867,7 +872,6 @@ class MainWindow(QtWidgets.QMainWindow):
         out[y0:y0 + new_h, x0:x0 + new_w] = resized
 
         return out
-
 
 
     def _online_learn_face(self, emp_id: str):

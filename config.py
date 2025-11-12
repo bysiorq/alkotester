@@ -21,8 +21,10 @@ CONFIG = {
     #   "ccw"  = 90° w lewo
     #   "180"  = do góry nogami
     #   "none" = bez obrotu (poziomo)
-    "camera_main_size": (1280, 720),  # (W,H) z sensora
-    "camera_fps": 60,
+
+    "camera_main_size": (1640, 1232),  # pełne FoV imx219 (tryb 4:3)
+    "camera_fps": 60,  # 1640×1232 ma ok. 41 fps, 30 fps jest bezpieczne
+
     "rotate_dir": "cw",
 
     # --- rozpoznawanie twarzy
