@@ -2,8 +2,9 @@
 # -*- coding: utf-8 -*-
 """
 Wsadowe demo detekcji/deskrypcji twarzy z polskimi (ASCII/freetype) adnotacjami:
-- YuNet (wieloprogowo / wieloskalowo) + fallback SSD i Haar
-- Haar + ORB (czytelne wizualizacje: FAST, siatka, surowe ORB, rozrzedzone ORB, orientacje, latki)
+- trzy niezalezne detektory twarzy: YuNet, SSD, Haar
+- Haar + ORB (czytelne wizualizacje: FAST, siatka, surowe ORB,
+  rozrzedzone ORB, orientacje, latki)
 
 Dla kazdego .jpg w katalogu wejsciowym tworzy podkatalog 1/, 2/, ... z plikami:
   00_meta_zrodlo_roi.jpg
@@ -11,8 +12,8 @@ Dla kazdego .jpg w katalogu wejsciowym tworzy podkatalog 1/, 2/, ... z plikami:
   02_skala_szarosci.jpg
   03_yunet_proba_XX_scale_S_score_T.jpg (dla kazdej proby)
   04_yunet_najlepsza.jpg  (albo *_brak_detekcji.jpg)
-  05_fallback_ssd.jpg
-  06_fallback_haar.jpg
+  05_ssd_detekcja.jpg
+  06_haar_detekcja.jpg
   07_twarz_240_bgr.jpg
   08_twarz_240_gray.jpg
   09_fast_rogi.jpg
@@ -59,14 +60,12 @@ _USE_FT = False
 def _init_freetype():
     global _FT2, _USE_FT
     try:
-        # cv2.freetype jest w opencv-contrib
         import cv2.freetype as ft
     except Exception:
         _FT2 = None
         _USE_FT = False
         return
 
-    # typowe lokalizacje fontow TrueType
     candidates = [
         "/usr/share/fonts/truetype/msttcorefonts/Arial.ttf",
         "/usr/share/fonts/truetype/msttcorefonts/arial.ttf",
@@ -97,15 +96,17 @@ def _init_freetype():
 _init_freetype()
 
 def put_tag(img, text, org=(10, 25), color=(0, 255, 255),
-            scale=0.7, thickness=2):
+            scale=0.6, thickness=1):
     """
     Wypisuje podpis:
       - TrueType (Arial / DejaVu) przez cv2.freetype, jesli dostepne,
       - w przeciwnym razie zwykle cv2.putText z transliteracja na ASCII.
+
+    Skala i grubosc sa dobrane tak, zeby minimalnie zaslaniac obraz.
     """
     if _USE_FT and _FT2 is not None:
         txt = text  # pelne polskie znaki
-        font_height = int(22 * scale)
+        font_height = int(20 * scale)
         try:
             _FT2.putText(
                 img, txt, org,
@@ -117,10 +118,8 @@ def put_tag(img, text, org=(10, 25), color=(0, 255, 255),
             )
             return
         except Exception:
-            # jesli freetype padnie w runtime, fallback na zwykle putText
-            pass
+            pass  # fallback nizej
 
-    # fallback – bez ogonkow, Hershey
     txt = ascii_pl(text)
     cv2.putText(
         img, txt, org,
@@ -148,7 +147,6 @@ def find_haar():
     return fname
 
 def draw_landmarks_pl(bgr, lm, color=(0, 255, 0)):
-    # nazwy bez ogonkow (ASCII) – zadziała wszedzie
     names = [
         "Lewe oko",
         "Prawe oko",
@@ -160,7 +158,7 @@ def draw_landmarks_pl(bgr, lm, color=(0, 255, 0)):
         x = int(lm[2 * i])
         y = int(lm[2 * i + 1])
         cv2.circle(bgr, (x, y), 2, color, -1, cv2.LINE_AA)
-        put_tag(bgr, names[i], (x + 3, y - 3), color, scale=0.4, thickness=1)
+        put_tag(bgr, names[i], (x + 3, y - 5), color, scale=0.45, thickness=1)
 
 def draw_grid_overlay(gray240, grid=8):
     vis = cv2.cvtColor(gray240, cv2.COLOR_GRAY2BGR)
@@ -169,7 +167,7 @@ def draw_grid_overlay(gray240, grid=8):
         x = i * step
         cv2.line(vis, (x, 0), (x, 239), (60, 60, 60), 1, cv2.LINE_AA)
         cv2.line(vis, (0, x), (239, x), (60, 60, 60), 1, cv2.LINE_AA)
-    put_tag(vis, f"Siatka {grid}x{grid}", (10, 22), (200, 200, 200), scale=0.6, thickness=1)
+    put_tag(vis, f"Siatka {grid}x{grid}", (10, 22), (220, 220, 220), scale=0.6, thickness=1)
     return vis
 
 def limit_keypoints_grid(kps, grid=8, size=240, per_cell=3):
@@ -373,7 +371,7 @@ def process_one_image(img_path, out_dir, args):
         dets = attempt["dets"]
         vis = bgr.copy()
         tag = f"YuNet s={sc:.2f}, prog>={thr:.2f}"
-        put_tag(vis, tag, (10, 25), (0, 255, 0), scale=0.7, thickness=2)
+        put_tag(vis, tag, (10, 25), (0, 255, 0), scale=0.7, thickness=1)
 
         if dets:
             for d in dets:
@@ -385,13 +383,12 @@ def process_one_image(img_path, out_dir, args):
                 )
                 if "lm" in d and d["lm"]:
                     draw_landmarks_pl(vis, d["lm"], (0, 255, 0))
-                # krótka etykieta przy ramce
                 put_tag(
                     vis,
                     f"p={s:.2f}",
                     (x + 5, max(15, y - 8)),
                     (0, 255, 0),
-                    scale=0.6,
+                    scale=0.55,
                     thickness=1,
                 )
         else:
@@ -401,7 +398,7 @@ def process_one_image(img_path, out_dir, args):
                 (10, 55),
                 (0, 255, 255),
                 scale=0.7,
-                thickness=2,
+                thickness=1,
             )
 
         savejpg(
@@ -432,7 +429,7 @@ def process_one_image(img_path, out_dir, args):
                 f"p={s:.2f}",
                 (x + 5, max(15, y - 8)),
                 (0, 200, 0),
-                scale=0.6,
+                scale=0.55,
                 thickness=1,
             )
         put_tag(
@@ -441,7 +438,7 @@ def process_one_image(img_path, out_dir, args):
             (10, 25),
             (0, 200, 0),
             scale=0.7,
-            thickness=2,
+            thickness=1,
         )
         savejpg(os.path.join(out_dir, "04_yunet_najlepsza.jpg"), vis_best, 95)
     else:
@@ -451,7 +448,7 @@ def process_one_image(img_path, out_dir, args):
             (10, 25),
             (0, 255, 255),
             scale=0.8,
-            thickness=2,
+            thickness=1,
         )
         savejpg(
             os.path.join(out_dir, "04_yunet_najlepsza_brak_detekcji.jpg"),
@@ -459,15 +456,13 @@ def process_one_image(img_path, out_dir, args):
             95,
         )
 
-    # 05: fallback SSD (tylko jesli YuNet nic nie wybral)
-    ssd_dets = []
-    if not yunet_dets:
-        ssd_dets = detect_ssd(
-            bgr,
-            args.ssd_proto,
-            args.ssd_model,
-            conf_th=0.60,
-        )
+    # 05: SSD – zawsze uruchamiane (osobny widok, nie fallback)
+    ssd_dets = detect_ssd(
+        bgr,
+        args.ssd_proto,
+        args.ssd_model,
+        conf_th=0.60,
+    )
     vis_ssd = bgr.copy()
     if ssd_dets:
         for d in ssd_dets:
@@ -481,16 +476,16 @@ def process_one_image(img_path, out_dir, args):
                 f"p={d['score']:.2f}",
                 (x + 5, max(15, y - 8)),
                 (255, 0, 0),
-                scale=0.6,
+                scale=0.55,
                 thickness=1,
             )
         put_tag(
             vis_ssd,
-            "SSD fallback",
+            "SSD detekcja",
             (10, 25),
             (255, 0, 0),
             scale=0.7,
-            thickness=2,
+            thickness=1,
         )
     else:
         put_tag(
@@ -499,14 +494,12 @@ def process_one_image(img_path, out_dir, args):
             (10, 25),
             (0, 255, 255),
             scale=0.8,
-            thickness=2,
+            thickness=1,
         )
-    savejpg(os.path.join(out_dir, "05_fallback_ssd.jpg"), vis_ssd, 95)
+    savejpg(os.path.join(out_dir, "05_ssd_detekcja.jpg"), vis_ssd, 95)
 
-    # 06: fallback Haar (tylko jesli YuNet i SSD puste)
-    haar_dets = []
-    if not yunet_dets and not ssd_dets:
-        haar_dets = detect_haar(gray)
+    # 06: Haar – zawsze uruchamiane (osobny widok, nie fallback)
+    haar_dets = detect_haar(gray)
     vis_haar = bgr.copy()
     if haar_dets:
         for d in haar_dets:
@@ -517,11 +510,11 @@ def process_one_image(img_path, out_dir, args):
             )
         put_tag(
             vis_haar,
-            "Haar fallback",
+            "Haar detekcja",
             (10, 25),
             (0, 255, 255),
             scale=0.7,
-            thickness=2,
+            thickness=1,
         )
     else:
         put_tag(
@@ -530,11 +523,12 @@ def process_one_image(img_path, out_dir, args):
             (10, 25),
             (0, 0, 255),
             scale=0.8,
-            thickness=2,
+            thickness=1,
         )
-    savejpg(os.path.join(out_dir, "06_fallback_haar.jpg"), vis_haar, 95)
+    savejpg(os.path.join(out_dir, "06_haar_detekcja.jpg"), vis_haar, 95)
 
-    # 07-14: ROI (YuNet > SSD > Haar, inaczej srodek)
+    # 07-14: ROI (do ORB) – tu moze byc priorytet (YuNet > SSD > Haar), ale to
+    # sluzy tylko do dalszej analizy, na obrazkach masz trzy niezalezne detekcje.
     chosen = None
     for arr in (yunet_dets, ssd_dets, haar_dets):
         if arr:
@@ -574,7 +568,7 @@ def process_one_image(img_path, out_dir, args):
         (10, 22),
         (0, 255, 255),
         scale=0.7,
-        thickness=2,
+        thickness=1,
     )
     savejpg(os.path.join(out_dir, "09_fast_rogi.jpg"), vis_fast, 95)
 
@@ -598,7 +592,7 @@ def process_one_image(img_path, out_dir, args):
         (10, 22),
         (200, 200, 255),
         scale=0.7,
-        thickness=2,
+        thickness=1,
     )
     savejpg(os.path.join(out_dir, "11_orb_surowe.jpg"), vis_raw, 95)
 
@@ -621,7 +615,7 @@ def process_one_image(img_path, out_dir, args):
         (10, 22),
         (0, 255, 0),
         scale=0.6,
-        thickness=2,
+        thickness=1,
     )
     savejpg(os.path.join(out_dir, "12_orb_po_siatce.jpg"), vis_tamed, 95)
 
@@ -657,7 +651,7 @@ def process_one_image(img_path, out_dir, args):
         (10, 22),
         (0, 200, 255),
         scale=0.7,
-        thickness=2,
+        thickness=1,
     )
     savejpg(os.path.join(out_dir, "13_orb_orientacje.jpg"), vis_orient, 95)
 
@@ -680,7 +674,7 @@ def process_one_image(img_path, out_dir, args):
         (10, 22),
         (255, 255, 255),
         scale=0.7,
-        thickness=2,
+        thickness=1,
     )
     savejpg(os.path.join(out_dir, "14_orb_latki_31x31.jpg"), montage, 95)
 
@@ -712,7 +706,7 @@ def parse_floats_csv(s):
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Wsadowe YuNet + Haar/ORB demo (czytelne polskie adnotacje)."
+        description="Wsadowe YuNet + SSD + Haar + ORB demo (czytelne polskie adnotacje)."
     )
     ap.add_argument(
         "--in_dir",
@@ -727,12 +721,12 @@ def main():
     ap.add_argument(
         "--ssd_proto",
         default="models/deploy.prototxt",
-        help="(opcjonalnie) deploy.prototxt",
+        help="Sciezka do deploy.prototxt (SSD Caffe)",
     )
     ap.add_argument(
         "--ssd_model",
         default="models/res10_300x300_ssd_iter_140000.caffemodel",
-        help="(opcjonalnie) caffemodel",
+        help="Sciezka do .caffemodel (SSD ResNet-10)",
     )
     ap.add_argument(
         "--scores",
